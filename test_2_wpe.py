@@ -349,13 +349,17 @@ def simulate_2(n_ch=2):
 
     return Sig_ori, sig_np
 
-def simulate_3(n_ch = 2):
-    from room_builder import random_room_builder
+def simulate_3(n_ch = 2, sinr = 600):
+
     sig = get_sources_3(n_ch)
     sig_np = np.array(sig)
-    room, t_60 = random_room_builder(sig , n_ch)
-    Sig_ori = room.mic_array.signals
-    Sig_ori = Sig_ori[:, :sig_np.shape[1]]
+    from room_builder import random_room_builder
+    Sig_ori, sig_np = random_room_builder(sig , n_ch, sinr = sinr)
+
+    sig_np = sig_np[:n_ch , :]
+    Sig_ori = Sig_ori / np.max(np.abs(Sig_ori), axis = 1)[:, None]
+    sig_np = sig_np / np.max(np.abs(sig_np), axis = 1)[:, None]
+    
 
     return Sig_ori, sig_np
 
@@ -364,23 +368,17 @@ n_ch = 2
 for i in range(333):
     print(i)
 
-    mixed_wav, ori_sig = simulate_3(n_ch)
-    mixed_wav = add_noise(mixed_wav)
+    mixed_wav, ref_sig = simulate_3(n_ch)
+    # mixed_wav = add_noise(mixed_wav)
     sf.write('test_wav/MT_ori.wav', mixed_wav.T, 16000)
 
-    ori_sig = np.hstack((ori_sig, np.zeros((n_ch, mixed_wav.shape[1] - ori_sig.shape[1]))))
-    si_sdr0, si_sir0, si_sar0, si_perm = si_bss_eval(ori_sig.T, mixed_wav.T)
+    # ori_sig = np.hstack((ori_sig, np.zeros((n_ch, mixed_wav.shape[1] - ori_sig.shape[1]))))
+    si_sdr0, si_sir0, si_sar0, si_perm = si_bss_eval(ref_sig.T, mixed_wav.T)
 
-    from torchmetrics import ScaleInvariantSignalDistortionRatio
-    import torch
-
-    # si_sdr_f = ScaleInvariantSignalDistortionRatio()
-    # si0 = si_sdr_f(torch.from_numpy(mixed_wav), torch.from_numpy(ori_sig))
-    # print(si0)
 
     from mir_eval.separation import bss_eval_sources
 
-    sdr0, sir0, sar0, perm = bss_eval_sources(ori_sig, mixed_wav)
+    sdr0, sir0, sar0, perm = bss_eval_sources(ref_sig, mixed_wav)
 
     #####处理
     stft_options = dict(size=1024, shift=1024 // 4)
@@ -461,26 +459,21 @@ for i in range(333):
 
         #######################################################################################################################
         z = istft(Z.transpose(1, 2, 0), size=stft_options['size'], shift=stft_options['shift'])
+        z = z[:, :ref_sig.shape[1]]
 
         sf.write('test_wav/MT_2_' + algorithm + '.wav', z.T, 16000)
         ##### 评估
-        ori_sig = np.hstack((ori_sig, np.zeros((n_ch, z.shape[1] - ori_sig.shape[1]))))
-        si_sdr1, si_sir1, si_sar1, si_perm1 = si_bss_eval(ori_sig.T, z.T)
+        
+
+        si_sdr1, si_sir1, si_sar1, si_perm1 = si_bss_eval(ref_sig.T, z.T)
         dsd = si_sdr1[si_perm1] - si_sdr0[si_perm]
         dsi = si_sir1[si_perm1] - si_sir0[si_perm]
         dsa = si_sar1[si_perm1] - si_sar0[si_perm]
 
-        from torchmetrics import ScaleInvariantSignalDistortionRatio
-        import torch
-
-        # si_sdr_f = ScaleInvariantSignalDistortionRatio()
-        # si1 = si_sdr_f(torch.from_numpy(z), torch.from_numpy(ori_sig))
-        # ds = si1 - si0
-        # print(ds)
 
         from mir_eval.separation import bss_eval_sources
 
-        sdr1, sir1, sar1, perm1 = bss_eval_sources(ori_sig, z)
+        sdr1, sir1, sar1, perm1 = bss_eval_sources(ref_sig, z)
         dd = sdr1[perm1] - sdr0[perm]
         di = sir1[perm1] - sir0[perm]
         da = sar1[perm1] - sar0[perm]

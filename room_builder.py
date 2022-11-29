@@ -248,6 +248,7 @@ def random_room_builder(
     source_zone_height: Tuple[float, float] = [1.0, 2.0],
     guard_zone_width: float = 0.5,
     seed: Optional[int] = None,
+    sinr = 6,
 ):
     """
     This function creates a random room within some parameters.
@@ -428,10 +429,10 @@ def random_room_builder(
     )
 
     premix = room.simulate(return_premix=True)
-    print(np.shape(premix))
+    # print(np.shape(premix))
     n_samples = premix.shape[-1]
     mix = callback_noise_mixer(
-        premix, n_src= n_sources, n_tgt= n_sources
+        premix, n_src= n_sources, n_tgt= n_sources, sinr = sinr,
     )
     refs = np.zeros((n_sources+ 1, n_samples))
     refs[:-1, :] = premix[:n_sources, 0, :]
