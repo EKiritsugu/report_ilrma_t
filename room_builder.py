@@ -242,13 +242,13 @@ def random_room_builder(
     n_mics: int,
     mic_delta: Optional[float] = None,
     fs: float = 16000,
-    t60_interval: Tuple[float, float] = (0.150, 0.500),
-    room_width_interval: Tuple[float, float] = (6, 10),
-    room_height_interval: Tuple[float, float] = (2.8, 4.5),
+    t60_interval: Tuple[float, float] = (0.20, 0.600),
+    room_width_interval: Tuple[float, float] = (5, 10),
+    room_height_interval: Tuple[float, float] = (3, 4),
     source_zone_height: Tuple[float, float] = [1.0, 2.0],
     guard_zone_width: float = 0.5,
     seed: Optional[int] = None,
-    sinr = 6,
+    sinr = 10,
 ):
     """
     This function creates a random room within some parameters.
