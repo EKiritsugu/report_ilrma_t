@@ -1,6 +1,5 @@
 # 这个来测试一下，换用CMU的声源来测试一下,CMU的测试条件，看看算法的表现是否类似
 
-# 
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -395,7 +394,7 @@ def simulate_3(n_ch = 2, sinr = 600):
     sig = get_sources(n_ch)
     sig_np = np.array(sig)
     from room_builder import random_room_builder
-    Sig_ori, sig_np = random_room_builder(sig , n_ch, sinr = sinr)
+    Sig_ori, sig_np = random_room_builder(sig , 2, sinr = sinr)
 
     sig_np = sig_np[:n_ch , :]
     Sig_ori = Sig_ori / np.max(np.abs(Sig_ori), axis = 1)[:, None]
@@ -405,7 +404,7 @@ def simulate_3(n_ch = 2, sinr = 600):
     return Sig_ori, sig_np
 
 print('working')
-n_ch = 3
+n_ch = 2
 for i in range(333):
     print(i)
 
@@ -414,12 +413,12 @@ for i in range(333):
     sf.write('test_wav/MT_ori.wav', mixed_wav.T, 16000)
 
     # ori_sig = np.hstack((ori_sig, np.zeros((n_ch, mixed_wav.shape[1] - ori_sig.shape[1]))))
-    si_sdr0, si_sir0, si_sar0, si_perm = si_bss_eval(ref_sig.T, mixed_wav.T)
+    si_sdr0, si_sir0, si_sar0, si_perm = si_bss_eval(ref_sig.T, mixed_wav[:n_ch, :].T)
 
 
     from mir_eval.separation import bss_eval_sources
 
-    sdr0, sir0, sar0, perm = bss_eval_sources(ref_sig, mixed_wav)
+    sdr0, sir0, sar0, perm = bss_eval_sources(ref_sig, mixed_wav[:n_ch, :])
 
     #####处理
     stft_options = dict(size=1024, shift=1024 // 4)
@@ -442,8 +441,7 @@ for i in range(333):
     algorithm = 'ilrma-t-iss-seq'
     # algorithm_list = ['my_ilrma_t', 'wpe', 'wpe+ilrma-IP', 'ilrma-t-IP', 'ilrma-t-iss-seq', 'ilrma-t-iss-joint',
     #                   'ilrma-IP', 'ilrma-iss', 'auxiva']
-    algorithm_list = [ 'my2_ilrma_t','wpe+ilrma-IP',  'ilrma-t-iss-seq','ilrma-t-IP',
-                      'ilrma-IP', 'auxiva']
+    algorithm_list = [ 'auxiva']
     # algorithm_list = ['wpe+ilrma-IP',  'ilrma-t-iss-seq',
                     #   'ilrma-IP', 'auxiva']
     ######################################################################################################################
@@ -465,7 +463,7 @@ for i in range(333):
 
             Y = ilrma_iss(X, n_iter=n_iter)
         elif algorithm == 'auxiva':
-            Y = pra.bss.auxiva(X, n_iter=n_iter)
+            Y = pra.bss.auxiva(X, n_iter=n_iter, n_src=n_ch)
         elif algorithm == 'wpe+ilrma-IP':
             from nara_wpe.wpe import wpe
 
@@ -519,8 +517,8 @@ for i in range(333):
         di = sir1[perm1] - sir0[perm]
         da = sar1[perm1] - sar0[perm]
 
-        file_txt = open('test_wav/cmu_wpe4_f_' + str(n_ch) + '.txt', mode='a')
-        file_txt.write(algorithm + '\t' + str(np.mean(dd)) + '\t' + str(np.max(dd))+  '\t' + str(np.mean(dsd)) + '\t' + str(np.max(dsd))+'\n')
+        file_txt = open('test_wav/cmu_I_over_2_' + str(n_ch) + '.txt', mode='a')
+        file_txt.write(algorithm + '\t' + str(np.mean(di)) + '\t' + str(np.max(di))+  '\t' + str(np.mean(dsi)) + '\t' + str(np.max(dsi))+'\n')
         file_txt.close()
 
 print('done')
