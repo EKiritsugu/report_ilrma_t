@@ -1351,3 +1351,168 @@ def my5_ilrma_t(X, n_components = 2, n_iter = 20, taps = 5, delay = 2):
 
 
 
+def wpe_ilrma(
+        X,
+    n_components = 2, 
+    n_src = None,
+    n_iter = 20, 
+
+    callback=None,
+    callback_checkpoints=[],
+        return_filters=False,
+    taps =  5,
+    delay = 2
+):
+
+    """
+    Parameters
+    ----------
+    X: ndarray (nframes, nfrequencies, nchannels)
+        STFT representation of the observed signal n_src: int, optional
+        The number of sources or independent components
+
+    """
+    from nara_wpe.wpe import wpe
+    print('wping')
+
+    X = wpe(X.transpose(1, 2, 0),
+            taps=taps,
+            delay=delay,
+            iterations=10,
+            statistics_mode='full'
+            ).transpose(2, 0, 1)
+
+
+    n_frames, n_freq, n_chan = X.shape
+
+    # default to determined case
+    if n_src is None:
+        n_src = X.shape[2]
+
+    # Only supports determined case
+    assert n_chan == n_src, "There should be as many microphones as sources"
+
+    # initialize the demixing matrices
+    # The demixing matrix has the following dimensions (nfrequencies, nchannels, nsources),
+
+    W = np.array([np.eye(n_chan, n_src) for f in range(n_freq)], dtype=X.dtype)
+
+
+    # initialize the nonnegative matrixes with random values
+    T = np.array(0.1 + 0.9 * np.random.rand(n_src, n_freq, n_components))
+    V = np.array(0.1 + 0.9 * np.random.rand(n_src, n_frames, n_components))
+    R = np.zeros((n_src, n_freq, n_frames))
+    I = np.eye(n_src, n_src)
+    U = np.zeros((n_freq, n_src, n_chan, n_chan), dtype=X.dtype)
+    product = np.zeros((n_freq, n_chan, n_chan), dtype=X.dtype)
+    lambda_aux = np.zeros(n_src)
+    eps = 1e-15
+    eyes = np.tile(np.eye(n_chan, n_chan), (n_freq, 1, 1))
+
+    # Things are more efficient when the frequencies are over the first axis
+    Y = np.zeros((n_freq, n_src, n_frames), dtype=X.dtype)
+    X_original = X
+    X = X.transpose([1, 2, 0]).copy()
+
+    ######################################################################################
+    # print('wping')
+    # s = Ellipsis
+    # X2 = np.copy(X)
+    # Y_tilde = build_y_tilde(X, taps, delay)
+    # for iteration in range(10):
+    #     print(iteration)
+    #     inverse_power = get_power_inverse(X2)
+    #     Y_tilde_inverse_power = Y_tilde * inverse_power[..., None, :]
+    #     R2 = np.matmul(Y_tilde_inverse_power[s], hermite(Y_tilde[s]))
+    #     P2 = np.matmul(Y_tilde_inverse_power[s], hermite(Y[s]))
+    #     # print(np.shape(R))
+    #     # print(np.shape(P))
+    #     G2 = _stable_solve(R2, P2)
+    #     X2 = Y - np.matmul(hermite(G2), Y_tilde)
+    # X = X2
+    ######################################################################################
+    print('ilrmaing')
+
+
+
+    np.matmul(T, V.swapaxes(1, 2), out=R)
+
+    # Compute the demixed output
+    def demix(Y, X, W):
+        Y[:, :, :] = np.matmul(W, X)
+
+    demix(Y, X, W)
+
+    # P.shape == R.shape == (n_src, n_freq, n_frames)
+    P = np.power(abs(Y.transpose([1, 0, 2])), 2.0)
+    iR = 1 / R
+
+
+    for epoch in range(n_iter):
+
+
+        # simple loop as a start
+        for s in range(n_src):
+            ## NMF
+            ######
+
+            T[s, :, :] *= np.sqrt(
+                np.dot(P[s, :, :] * iR[s, :, :] ** 2, V[s, :, :])
+                / np.dot(iR[s, :, :], V[s, :, :])
+            )
+            T[T < eps] = eps
+
+            R[s, :, :] = np.dot(T[s, :, :], V[s, :, :].T)
+            R[R < eps] = eps
+            iR[s, :, :] = 1 / R[s, :, :]
+
+            V[s, :, :] *= np.sqrt(
+                np.dot(P[s, :, :].T * iR[s, :, :].T ** 2, T[s, :, :])
+                / np.dot(iR[s, :, :].T, T[s, :, :])
+            )
+            V[V < eps] = eps
+
+            R[s, :, :] = np.dot(T[s, :, :], V[s, :, :].T)
+            R[R < eps] = eps
+            iR[s, :, :] = 1 / R[s, :, :]
+
+            ## IVA
+            ######
+
+            # Compute Auxiliary Variable
+            # shape: (n_freq, n_chan, n_chan)
+            C = np.matmul((X * iR[s, :, None, :]), np.conj(X.swapaxes(1, 2))) / n_frames
+
+            WV = np.matmul(W, C)
+            W[:, s, :] = np.conj(np.linalg.solve(WV, eyes[:, :, s]))
+
+            # normalize
+            denom = np.matmul(
+                np.matmul(W[:, None, s, :], C[:, :, :]), np.conj(W[:, s, :, None])
+            )
+            W[:, s, :] /= np.sqrt(denom[:, :, 0])
+
+        demix(Y, X, W)
+        np.power(abs(Y.transpose([1, 0, 2])), 2.0, out=P)
+
+        for s in range(n_src):
+            lambda_aux[s] = 1 / np.sqrt(np.mean(P[s, :, :]))
+
+            W[:, :, s] *= lambda_aux[s]
+            P[s, :, :] *= lambda_aux[s] ** 2
+            R[s, :, :] *= lambda_aux[s] ** 2
+            T[s, :, :] *= lambda_aux[s] ** 2
+        if callback is not None and (epoch + 1) in callback_checkpoints:
+            Y_tmp = Y.transpose([2, 0, 1])
+            callback(W, Y_tmp, "laplace")
+
+    Y = Y.transpose([2, 0, 1]).copy()
+
+
+    if return_filters:
+        return Y, W
+    else:
+        return Y
+
+
+

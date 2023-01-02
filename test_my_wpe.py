@@ -352,8 +352,8 @@ for i in range(3):
     sampling_rate = 16000
     delay = 2
     iterations = 100
-    taps = 20
-    n_iter = 100
+    taps = 5
+    n_iter = 30
     n_components = 2
 
     y = mixed_wav
@@ -365,13 +365,12 @@ for i in range(3):
     # input&output X: n_freq, n_ch, n_frame
 
     X = X.transpose(2, 0, 1)
-    algorithm = 'ilrma-t-iss-seq'
+    algorithm = 'wpe+ilrma'
     # algorithm_list = ['my_ilrma_t', 'wpe', 'wpe+ilrma-IP', 'ilrma-t-IP', 'ilrma-t-iss-seq', 'ilrma-t-iss-joint',
     #                   'ilrma-IP', 'ilrma-iss', 'auxiva']
     # algorithm_list = [ 'my5_ilrma_t','my4_ilrma_t','my3_ilrma_t','my2_ilrma_t','wpe_6','wpe+ilrma-IP',  'ilrma-t-iss-seq',
     #                   'ilrma-IP', 'auxiva']
-    algorithm_list = ['wpe+ilrma-IP',  'ilrma-t-iss-seq',
-                      'ilrma-IP', 'auxiva']
+    algorithm_list = [ 'wpe+ilrma','wpe+ilrma-IP']
     ######################################################################################################################
     from ilrma_t_function import *
     import pyroomacoustics as pra
@@ -394,6 +393,7 @@ for i in range(3):
             Y = pra.bss.auxiva(X, n_iter=n_iter)
         elif algorithm == 'wpe+ilrma-IP':
             from nara_wpe.wpe import wpe
+            print('wping')
 
             Y = wpe(X.transpose(1, 2, 0),
                     taps=taps,
@@ -401,6 +401,7 @@ for i in range(3):
                     iterations=50,
                     statistics_mode='full'
                     ).transpose(2, 0, 1)
+            print('ilrmaing')
             Y = pra.bss.ilrma(Y, n_iter=50)
         elif algorithm == 'wpe_6':
 
@@ -421,6 +422,8 @@ for i in range(3):
             Y = my4_ilrma_t(X, n_iter=n_iter)
         elif algorithm == 'my5_ilrma_t':
             Y = my5_ilrma_t(X, n_iter=n_iter)
+        elif algorithm == 'wpe+ilrma':
+            Y = wpe_ilrma(X , n_iter= n_iter)
 
         Z = Y.transpose(1, 2, 0)
 
@@ -450,7 +453,7 @@ for i in range(3):
         di = sir1[perm1] - sir0[perm]
         da = sar1[perm1] - sar0[perm]
 
-        file_txt = open('test_wav/my_wpe_f_' + str(n_ch) + '.txt', mode='a')
+        file_txt = open('test_wav/fuck_wpe_f_' + str(n_ch) + '.txt', mode='a')
         file_txt.write(algorithm + '\t' + str(np.mean(dd)) + '\t' + str(ds.item()) + '\t' + str(np.mean(dsd)) + '\n')
         file_txt.close()
 
